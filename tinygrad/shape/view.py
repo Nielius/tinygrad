@@ -161,7 +161,7 @@ class View:
     return View.create(new_shape, new_strides, new_offset, new_mask), dict(x[1] for x in var_unboundvar_val)
 
   @functools.lru_cache(maxsize=None)  # pylint: disable=method-cache-max-size-none
-  def __add__(self, vm1:View) -> Optional[View]:
+  def __add__(self, vm1:View) -> Optional[View]:  # first do vm2, then vm1
     vm2 = self
     if vm2.contiguous: return vm1
     if vm1.contiguous and vm1.shape == vm2.shape: return vm2
@@ -175,12 +175,12 @@ class View:
     origin = unravel(vm2.shape, vm1.offset)
     terms: List[List[Tuple[int, sint]]] = [[] for _ in vm2.shape]
     strides: List[sint] = [0] * len(vm1.shape)
-    for d1, st in enumerate(vm1.strides):
+    for d1, st in enumerate(vm1.strides): # d1, d2 iterate over the dimensions of vm1 and vm2
       if st == 0: continue
-      for d2, (o, s1) in enumerate(zip(origin, unravel(vm2.shape, vm1.offset + st))):
+      for d2, (o, s1) in enumerate(zip(origin, unravel(vm2.shape, vm1.offset + st))): # s1 iterates over the coordinates of item vm1.offset + stride (for the given dimension); this directly calculates the coordinates; but I wonder if there is a check; do we know that you only need to check for a single step?
         if (s1 := s1 - o) == 0: continue
-        terms[d2].append((d1, s1))
-        strides[d1] += s1 * vm2.strides[d2]
+        terms[d2].append((d1, s1)) # terms[d2] will be the list of (d1, coordinate that d2 will get when d1 -> d1 + 1)
+        strides[d1] += s1 * vm2.strides[d2] # this collects all the strides that d1 -> d1 + 1 has for effect
 
     # Merge dimensions in vm2 if required.
     # NB: Merging too many dimensions can make it difficult to project vm2's mask, hence only combining when required.
